@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import asyncHandler from "express-async-handler";
-import { unlinkSync, createReadStream } from "fs";
+import { createReadStream, promises as fsPromises } from "fs";
 import { parse as parseCsv } from "csv-parse";
 import ExcelJS from "exceljs";
 import AppError from "../utils/app.error.js";
@@ -10,20 +10,22 @@ import { UserModel } from "../models/user.model.js";
 
 export const createEmployee = asyncHandler(
 	async (req: Request, res: Response, next: NextFunction) => {
-		// Check if a file was uploaded
-		if (req.file) {
-			// Handle bulk upload
-			const filePath = req.file.path;
-			let employeesData: IEmployee[] = [];
+		let filePath: string | undefined;
 
-			try {
+		try {
+			if (req.file) {
+				if (!req.file.path) {
+					return next(new AppError("Uploaded file path is missing.", 400));
+				}
+
+				filePath = req.file.path;
+				let employeesData: IEmployee[] = [];
+
 				if (req.file.originalname.endsWith(".xlsx")) {
-					// Parse .xlsx file using ExcelJS
 					const workbook = new ExcelJS.Workbook();
 					await workbook.xlsx.readFile(filePath);
 					const worksheet = workbook.getWorksheet(1);
 
-					// Check if the worksheet exists
 					if (!worksheet) {
 						return next(
 							new AppError(
@@ -33,7 +35,6 @@ export const createEmployee = asyncHandler(
 						);
 					}
 
-					// Convert worksheet data to JSON
 					const data: any[] = [];
 					const header: string[] = [];
 					worksheet.getRow(1)?.eachCell((cell, colNumber) => {
@@ -52,16 +53,18 @@ export const createEmployee = asyncHandler(
 
 					employeesData = mapFileDataToSchema(data);
 				} else if (req.file.originalname.endsWith(".csv")) {
-					// Parse .csv file
 					const data = await new Promise<any[]>((resolve, reject) => {
 						const parsedData: any[] = [];
-						const stream = createReadStream(filePath);
+						const stream = createReadStream(filePath!);
 						stream
 							.pipe(parseCsv({ columns: true }))
-							.on("data", (row: any) => parsedData.push(row))
+							.on("data", (row: any) => {
+								parsedData.push(row);
+							})
 							.on("end", () => resolve(parsedData))
 							.on("error", (error: any) => reject(error));
 					});
+
 					employeesData = mapFileDataToSchema(data);
 				} else {
 					return next(new AppError("Unsupported file type", 400));
@@ -69,7 +72,7 @@ export const createEmployee = asyncHandler(
 
 				const userAccountsInFile = employeesData
 					.map((emp) => emp.userAccount)
-					.filter(Boolean); // Filter out undefined or null values
+					.filter(Boolean);
 
 				if (userAccountsInFile.length > 0) {
 					const existingUsers = await UserModel.find({
@@ -77,16 +80,12 @@ export const createEmployee = asyncHandler(
 					});
 
 					if (existingUsers.length !== userAccountsInFile.length) {
-						// Find the missing IDs for a more detailed error message
 						const existingUserIds = new Set(
 							existingUsers.map((user) => user._id.toString())
 						);
 						const missingIds = userAccountsInFile.filter(
 							(id) => !existingUserIds.has(id!.toString())
 						);
-
-						// Clean up the temporary file before returning an error
-						unlinkSync(filePath);
 						return next(
 							new AppError(
 								`One or more user accounts not found. Missing IDs: ${missingIds.join(
@@ -97,14 +96,12 @@ export const createEmployee = asyncHandler(
 						);
 					}
 				}
-				// Insert data into the database in bulk
+
 				const result = await Employee.insertMany(employeesData, {
 					ordered: false,
 				});
 
-				// Update user verification status for bulk uploads
 				const usersToVerify = employeesData.filter((emp) => emp.userAccount);
-
 				if (usersToVerify.length > 0) {
 					const updatePromises = usersToVerify.map((emp) =>
 						UserModel.findByIdAndUpdate(emp.userAccount, { isVerified: true })
@@ -112,81 +109,82 @@ export const createEmployee = asyncHandler(
 					await Promise.all(updatePromises);
 				}
 
-				// Remove the temporary file
-				unlinkSync(filePath);
-
 				res.status(201).json({
 					success: true,
 					message: `${result.length} employees created successfully`,
 					employees: result,
 				});
-			} catch (error: any) {
-				// Clean up the file on error
-				unlinkSync(filePath);
-				if (error.code === 11000) {
+			} else {
+				const {
+					fullName,
+					employeeId,
+					dateOfBirth,
+					gender,
+					nationality,
+					photoUrl,
+					employmentInfo,
+					contactInfo,
+					userAccount,
+				} = req.body;
+
+				if (
+					!fullName ||
+					!employeeId ||
+					!dateOfBirth ||
+					!employmentInfo ||
+					!contactInfo
+				) {
 					return next(
-						new AppError("Duplicate employee ID or email found in file.", 409)
+						new AppError("Missing required fields for manual entry.", 400)
 					);
 				}
+
+				if (userAccount) {
+					const userExists = await UserModel.exists({ _id: userAccount });
+					if (!userExists) {
+						return next(new AppError("User account not found.", 404));
+					}
+				}
+
+				const employee = await Employee.create({
+					fullName,
+					employeeId,
+					dateOfBirth,
+					gender,
+					nationality,
+					photoUrl,
+					employmentInfo,
+					contactInfo,
+					userAccount,
+				});
+
+				if (userAccount) {
+					await UserModel.findByIdAndUpdate(userAccount, { isVerified: true });
+				}
+
+				res.status(201).json({
+					success: true,
+					message: "Employee created successfully",
+					employee,
+				});
+			}
+		} catch (error: any) {
+			if (error.code === 11000) {
 				return next(
-					new AppError(`File processing failed: ${error.message}`, 500)
+					new AppError("Duplicate employee ID or email found in file.", 409)
 				);
 			}
-		} else {
-			// Handle manual entry from the request body
-			const {
-				fullName,
-				employeeId,
-				dateOfBirth,
-				gender,
-				nationality,
-				photoUrl,
-				employmentInfo,
-				contactInfo,
-				userAccount,
-			} = req.body;
-
-			if (
-				!fullName ||
-				!employeeId ||
-				!dateOfBirth ||
-				!employmentInfo ||
-				!contactInfo
-			) {
-				return next(
-					new AppError("Missing required fields for manual entry.", 400)
-				);
-			}
-
-			if (userAccount) {
-				const userExists = await UserModel.exists({ _id: userAccount });
-				if (!userExists) {
-					return next(new AppError("User account not found.", 404));
+			return next(
+				new AppError(`File processing failed: ${error.message}`, 500)
+			);
+		} finally {
+			if (filePath) {
+				try {
+					await fsPromises.unlink(filePath);
+				} catch (unlinkError) {
+					console.error(unlinkError);
 				}
 			}
-
-			const employee = await Employee.create({
-				fullName,
-				employeeId,
-				dateOfBirth,
-				gender,
-				nationality,
-				photoUrl,
-				employmentInfo,
-				contactInfo,
-				userAccount,
-			});
-
-			// Update user verification status for manual entry
-			if (userAccount) {
-				await UserModel.findByIdAndUpdate(userAccount, { isVerified: true });
-			}
-
-			res.status(201).json({
-				success: true,
-				message: "Employee created successfully",
-				employee,
-			});
 		}
 	}
 );
