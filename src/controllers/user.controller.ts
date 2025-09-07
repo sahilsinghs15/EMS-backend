@@ -55,6 +55,11 @@ export const loginUser = asyncHandler(
 		// Explicitly select the password field for comparison
 		const user = await UserModel.findOne({ email }).select("+password");
 
+		//Admin will verify the user first
+		if (user?.isVerified != true) {
+			return next(new AppError("You are not verified for the login", 401));
+		}
+
 		if (!(user && (await user.comparePassword(password)))) {
 			return next(
 				new AppError(
@@ -64,7 +69,6 @@ export const loginUser = asyncHandler(
 			);
 		}
 
-		// JWT generation does not need to be awaited
 		const token = user.generateJWTToken();
 		res.cookie("token", token, cookieOptions);
 

@@ -8,6 +8,7 @@ export interface IUser {
 	email: string;
 	password?: string; // Optional because we use select: false
 	role: "USER" | "DEVELOPER" | "TEAMLEAD" | "HR" | "ADMIN";
+	isVerified: boolean;
 }
 
 export interface IUserMethods {
@@ -48,6 +49,10 @@ const userSchema = new Schema<IUser, {}, IUserMethods>(
 			type: String,
 			enum: ["USER", "DEVELOPER", "TEAMLEAD", "HR", "ADMIN"],
 			default: "USER",
+		},
+		isVerified: {
+			type: Boolean,
+			default: false,
 		},
 	},
 	{

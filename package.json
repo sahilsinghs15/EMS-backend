@@ -6,15 +6,20 @@
     "dev": "ts-node src/server.ts"
   },
   "dependencies": {
+    "@types/exceljs": "^0.5.3",
+    "@types/multer": "^2.0.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "csv-parse": "^6.1.0",
     "dotenv": "^17.2.2",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.18.0"
+    "mongoose": "^8.18.0",
+    "multer": "^2.0.2"
   },
   "description": "",
   "devDependencies": {
