@@ -7,7 +7,15 @@ import AppError from "../utils/app.error.js";
 import { mapFileDataToSchema } from "../helpers/mapFileData.js";
 import { Employee, IEmployee } from "../models/employee.model.js";
 import { UserModel } from "../models/user.model.js";
+import { Types } from "mongoose";
 
+interface RequestWithId extends Request {
+	params: {
+		id: string;
+	};
+}
+
+// @Admin
 export const createEmployee = asyncHandler(
 	async (req: Request, res: Response, next: NextFunction) => {
 		let filePath: string | undefined;
@@ -182,9 +190,134 @@ export const createEmployee = asyncHandler(
 				try {
 					await fsPromises.unlink(filePath);
 				} catch (unlinkError) {
-					console.error(unlinkError);
+					console.error("Error deleting temporary file:", unlinkError);
 				}
 			}
 		}
+	}
+);
+
+// @Admin
+export const getAllEmployees = asyncHandler(
+	async (req: Request, res: Response) => {
+		const employees = await Employee.find({});
+		res.status(200).json({
+			success: true,
+			message: "Employees data fetched successfully",
+			employees,
+		});
+	}
+);
+
+// @User or @Admin
+export const getEmployee = asyncHandler(
+	async (req: Request, res: Response, next: NextFunction) => {
+		const userId = req.user?._id;
+		if (!userId) {
+			return next(new AppError("User not authenticated", 401));
+		}
+
+		const employee = await Employee.findOne({ userAccount: userId });
+
+		if (!employee) {
+			return next(new AppError("Employee does not exist", 404));
+		}
+
+		res.status(200).json({
+			success: true,
+			message: "Employee details fetched successfully",
+			employee,
+		});
+	}
+);
+
+// @Admin
+export const findEmployeeById = asyncHandler(
+	async (req: RequestWithId, res: Response, next: NextFunction) => {
+		if (!req.params.id || !Types.ObjectId.isValid(req.params.id)) {
+			return next(new AppError("Invalid employee ID provided", 400));
+		}
+
+		const employee = await Employee.findById(req.params.id);
+
+		if (!employee) {
+			return next(new AppError("Employee not found", 404));
+		}
+
+		res.status(200).json({
+			success: true,
+			message: "Employee found successfully",
+			employee,
+		});
+	}
+);
+
+// @Admin
+export const updateEmployee = asyncHandler(
+	async (req: RequestWithId, res: Response, next: NextFunction) => {
+		if (req.body.userAccount || req.body.employeeId) {
+			return next(
+				new AppError(
+					"Updating 'userAccount' or 'employeeId' is not allowed.",
+					403
+				)
+			);
+		}
+
+		if (!req.params.id || !Types.ObjectId.isValid(req.params.id)) {
+			return next(new AppError("Invalid employee ID provided", 400));
+		}
+
+		const employee = await Employee.findByIdAndUpdate(req.params.id, req.body, {
+			new: true,
+			runValidators: true,
+		});
+
+		if (!employee) {
+			return next(new AppError("Employee not found", 404));
+		}
+
+		res.status(200).json({
+			success: true,
+			message: "Employee updated successfully",
+			employee,
+		});
+	}
+);
+
+// @Admin
+export const deleteEmployee = asyncHandler(
+	async (req: RequestWithId, res: Response, next: NextFunction) => {
+		if (!req.params.id || !Types.ObjectId.isValid(req.params.id)) {
+			return next(new AppError("Invalid employee ID provided", 400));
+		}
+
+		const employee = await Employee.findById(req.params.id);
+
+		if (!employee) {
+			return next(new AppError("Employee not found", 404));
+		}
+
+		const user = await UserModel.findById(employee.userAccount);
+		if (!user) {
+			return next(new AppError("User does not exist", 404));
+		}
+
+		if (user.role === "ADMIN") {
+			return next(
+				new AppError(
+					"Employee Data of the user having ADMIN Role Cannot deleted!",
+					403
+				)
+			);
+		}
+
+		await Employee.findByIdAndDelete(req.params.id);
+
+		res.status(200).json({
+			success: true,
+			message: "Employee deleted successfully",
+			data: null,
+		});
 	}
 );

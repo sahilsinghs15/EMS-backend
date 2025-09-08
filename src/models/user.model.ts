@@ -79,8 +79,6 @@ userSchema.pre<UserDocument>("save", async function (next) {
 userSchema.methods.comparePassword = async function (
 	plainPassword: string
 ): Promise<boolean> {
-	// NOTE: You must explicitly select the password field in your query for this to work
-	// Example: User.findOne({ email: '...' }).select('+password');
 	return await bcrypt.compare(plainPassword, this.password!);
 };
 

@@ -1,10 +1,18 @@
 import { Router } from "express";
-import { createEmployee } from "../controllers/employee.controller.js";
+import {
+	createEmployee,
+	getAllEmployees,
+	getEmployee,
+	findEmployeeById,
+	updateEmployee,
+	deleteEmployee,
+} from "../controllers/employee.controller.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { Request } from "express";
 import AppError from "../utils/app.error.js";
+import { authorizeRoles, isLoggedIn } from "../middlewares/auth.middleware.js";
 
 // Ensure upload directory exists
 const uploadDir = "uploads";
@@ -24,7 +32,6 @@ const storage = multer.diskStorage({
 	},
 });
 
-// Multer config with storage, size limit, and file filter
 const upload = multer({
 	storage,
 	limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
@@ -47,7 +54,19 @@ const upload = multer({
 
 const router = Router();
 
-router.post("/create", createEmployee);
-router.post("/create/bulk", upload.single("file"), createEmployee);
+router.get("/", isLoggedIn, getEmployee);
+router.get("/all", isLoggedIn, authorizeRoles("ADMIN"), getAllEmployees);
+router.post("/create", isLoggedIn, authorizeRoles("ADMIN"), createEmployee);
+router.post(
+	"/create/bulk",
+	isLoggedIn,
+	authorizeRoles("ADMIN"),
+	upload.single("file"),
+	createEmployee
+);
+
+router.get("/:id", isLoggedIn, authorizeRoles("ADMIN"), findEmployeeById);
+router.patch("/:id", isLoggedIn, authorizeRoles("ADMIN"), updateEmployee);
+router.delete("/:id", isLoggedIn, authorizeRoles("ADMIN"), deleteEmployee);
 
 export default router;

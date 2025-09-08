@@ -5,22 +5,18 @@ import asyncHandler from "express-async-handler";
 
 const cookieOptions = {
 	secure: process.env.NODE_ENV === "production",
-	maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+	maxAge: 7 * 24 * 60 * 60 * 1000,
 	httpOnly: true,
 };
 
 export const registerUser = asyncHandler(
 	async (req: Request, res: Response, next: NextFunction) => {
 		const { username, email, password } = req.body;
-
-		// Corrected logical check for required fields
 		if (!username || !email || !password) {
 			return next(
 				new AppError("username, Email, and Password are required", 403)
 			);
 		}
-
-		// Use create, which automatically saves the document
 		const user = await UserModel.create({
 			username: username,
 			email: email,
@@ -31,14 +27,10 @@ export const registerUser = asyncHandler(
 			return next(new AppError("User not created, some error occurred", 403));
 		}
 
-		// JWT generation does not need to be awaited
-		const token = user.generateJWTToken();
-
-		res.cookie("token", token, cookieOptions);
-
 		res.status(201).json({
 			success: true,
-			message: "User created successfully",
+			message:
+				"User account created successfully. Awaiting admin verification.",
 			user,
 		});
 	}
@@ -51,11 +43,7 @@ export const loginUser = asyncHandler(
 		if (!email || !password) {
 			return next(new AppError("Email and Password are required", 400));
 		}
-
-		// Explicitly select the password field for comparison
 		const user = await UserModel.findOne({ email }).select("+password");
-
-		//Admin will verify the user first
 		if (user?.isVerified != true) {
 			return next(new AppError("You are not verified for the login", 401));
 		}
@@ -115,8 +103,6 @@ export const updateUser = asyncHandler(
 		if (!userId) {
 			return next(new AppError("User ID not found in request", 400));
 		}
-
-		// Find the user by the authenticated user's ID for security
 		const user = await UserModel.findById(userId);
 
 		if (!user) {
@@ -126,8 +112,19 @@ export const updateUser = asyncHandler(
 		if (username) {
 			user.username = username;
 		}
-		if (email) {
+
+		if (email && email !== user.email) {
+			const emailExists = await UserModel.exists({ email });
+			if (emailExists) {
+				return next(
+					new AppError("Email already in use by another account", 409)
+				);
+			}
 			user.email = email;
+		}
+
+		if (req.body.role) {
+			delete req.body.role;
 		}
 
 		await user.save();
