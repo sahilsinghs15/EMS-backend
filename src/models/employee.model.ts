@@ -29,39 +29,6 @@ export interface IEmployee extends Document {
 	userAccount?: Types.ObjectId; // Reference to a UserAccount
 }
 
-export interface IEmergencyContact extends Document {
-	employee: Types.ObjectId; // Reference to an Employee
-	name: string;
-	relationship?: string;
-	phoneNumber?: string;
-	address?: string;
-}
-
-const emergencyContactSchema = new Schema<IEmergencyContact>({
-	employee: {
-		type: Schema.Types.ObjectId,
-		ref: "Employee",
-		required: true,
-	},
-	name: {
-		type: String,
-		required: true,
-		trim: true,
-	},
-	relationship: {
-		type: String,
-		trim: true,
-	},
-	phoneNumber: {
-		type: String,
-		trim: true,
-	},
-	address: {
-		type: String,
-		trim: true,
-	},
-});
-
 const employeeSchema = new Schema<IEmployee>(
 	{
 		fullName: {
@@ -152,8 +119,4 @@ const employeeSchema = new Schema<IEmployee>(
 	{ timestamps: true }
 );
 
-export const EmergencyContact = model<IEmergencyContact>(
-	"EmergencyContact",
-	emergencyContactSchema
-);
 export const Employee = model<IEmployee>("Employee", employeeSchema);
