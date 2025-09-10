@@ -10,7 +10,8 @@ export interface IContactInfo {
 
 export interface IEmploymentInfo {
 	jobTitle: string;
-	manager?: Types.ObjectId; // Reference to another Employee
+	manager?: Types.ObjectId;
+	department: "Web-Dev" | "Mobile-Dev" | "Data-Analyst" | "HR";
 	hireDate: Date;
 	employmentType?: "Full-time" | "Part-time" | "Contract" | "Intern";
 	status?: "Active" | "On Leave" | "Terminated";
@@ -26,7 +27,7 @@ export interface IEmployee extends Document {
 	photoUrl?: string;
 	employmentInfo: IEmploymentInfo;
 	contactInfo: IContactInfo;
-	userAccount?: Types.ObjectId; // Reference to a UserAccount
+	userAccount?: Types.ObjectId;
 }
 
 const employeeSchema = new Schema<IEmployee>(
@@ -67,6 +68,10 @@ const employeeSchema = new Schema<IEmployee>(
 			manager: {
 				type: Schema.Types.ObjectId,
 				ref: "Employee",
+			},
+			department: {
+				type: String,
+				enum: ["Web-Dev", "Mobile-Dev", "Data-Analyst", "HR"],
 			},
 			hireDate: {
 				type: Date,

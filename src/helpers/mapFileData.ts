@@ -13,6 +13,7 @@ const headerMap: { [key: string]: keyof IEmployee | string } = {
 	"Photo URL": "photoUrl",
 	"Job Title": "employmentInfo.jobTitle",
 	"Manager ID": "employmentInfo.manager",
+	Department: "employmentInfo.department",
 	"Hire Date": "employmentInfo.hireDate",
 	"Employment Type": "employmentInfo.employmentType",
 	Status: "employmentInfo.status",
